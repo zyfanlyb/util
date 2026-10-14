@@ -1,4 +1,4 @@
-package main
+package common
 
 // rs256.go —— 认证中心(IdP)用 RSA 私钥签发 JWT、业务系统用公钥验签的最小可用实现。
 //
