@@ -1,4 +1,4 @@
-module util
+module github.com/zyfanlyb/util
 
 go 1.26.4
 
