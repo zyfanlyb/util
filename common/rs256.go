@@ -112,13 +112,9 @@ type Header struct {
 	KID string `json:"kid"`
 }
 
-// Sign 用私钥签发一个 RS256 JWT。
+// GenerateJWT 用私钥签发一个 RS256 JWT，返回 header.payload.signature。
 // exp 未指定时默认 15 分钟有效;iat 未指定时自动填当前时间。
-func (ks *KeyStore) Sign(claims Claims) (string, error) {
-	if ks.Private == nil {
-		return "", errors.New("缺少私钥,只有认证中心能签发 token")
-	}
-
+func (ks *KeyStore) GenerateJWT(claims Claims) (string, error) {
 	now := time.Now()
 	if _, ok := claims["iat"]; !ok {
 		claims["iat"] = now.Unix()
@@ -138,14 +134,21 @@ func (ks *KeyStore) Sign(claims Claims) (string, error) {
 	}
 
 	signingInput := b64uEncode(hdrJSON) + "." + b64uEncode(plJSON)
-	digest := sha256.Sum256([]byte(signingInput))
-
-	// RS256 = RSASSA-PKCS1-v1_5 + SHA-256,必须是 PKCS1v15(PSS 对应的是 PS256)
-	sig, err := rsa.SignPKCS1v15(rand.Reader, ks.Private, crypto.SHA256, digest[:])
+	sig, err := ks.Sign([]byte(signingInput))
 	if err != nil {
 		return "", err
 	}
 	return signingInput + "." + b64uEncode(sig), nil
+}
+
+// Sign 对 data 做 SHA-256，再用私钥做 RSASSA-PKCS1-v1_5 签名，只返回签名字节。
+// RS256 = RSASSA-PKCS1-v1_5 + SHA-256，必须是 PKCS1v15（PSS 对应的是 PS256）。
+func (ks *KeyStore) Sign(data []byte) ([]byte, error) {
+	if ks.Private == nil {
+		return nil, errors.New("缺少私钥,只有认证中心能签发 token")
+	}
+	digest := sha256.Sum256(data)
+	return rsa.SignPKCS1v15(rand.Reader, ks.Private, crypto.SHA256, digest[:])
 }
 
 // ============================ 验签(业务系统) ============================
@@ -351,7 +354,7 @@ func testRS256() {
 
 	// ---------- 签发 ----------
 	title("2. 登录成功后签发 token")
-	token, err := ks.Sign(Claims{
+	token, err := ks.GenerateJWT(Claims{
 		"iss":   "https://sso.example.com",
 		"sub":   "10086",
 		"aud":   "order-service",
@@ -407,7 +410,7 @@ func testRS256() {
 	fmt.Println("结果   :", err)
 
 	title("7. 过期 token")
-	expired, _ := ks.Sign(Claims{"sub": "10086", "exp": time.Now().Add(-time.Minute).Unix()})
+	expired, _ := ks.GenerateJWT(Claims{"sub": "10086", "exp": time.Now().Add(-time.Minute).Unix()})
 	_, err = Verify(expired, pub, VerifyOptions{})
 	fmt.Println("结果   :", err)
 
