@@ -4,3 +4,4 @@ go.sum
 .env
 *.exe
 .vscode/
+.idea/
